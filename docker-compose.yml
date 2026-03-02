@@ -1,0 +1,80 @@
+version: '3.9'
+
+services:
+  # ── PostgreSQL ──────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER:     ${POSTGRES_USER:-gotodm}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+      POSTGRES_DB:       ${POSTGRES_DB:-gotodm}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-gotodm}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Redis ───────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Backend ─────────────────────────────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV:              production
+      PORT:                  3001
+      DATABASE_URL:          postgres://${POSTGRES_USER:-gotodm}:${POSTGRES_PASSWORD:-changeme}@postgres:5432/${POSTGRES_DB:-gotodm}
+      REDIS_URL:             redis://redis:6379
+      JWT_SECRET:            ${JWT_SECRET}
+      TOKEN_ENCRYPTION_KEY:  ${TOKEN_ENCRYPTION_KEY}
+      INSTAGRAM_APP_ID:      ${INSTAGRAM_APP_ID}
+      INSTAGRAM_APP_SECRET:  ${INSTAGRAM_APP_SECRET}
+      INSTAGRAM_REDIRECT_URI: ${INSTAGRAM_REDIRECT_URI}
+      WEBHOOK_VERIFY_TOKEN:  ${WEBHOOK_VERIFY_TOKEN}
+      STRIPE_SECRET_KEY:     ${STRIPE_SECRET_KEY}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET}
+      STRIPE_PRICE_STARTER:  ${STRIPE_PRICE_STARTER}
+      STRIPE_PRICE_PRO:      ${STRIPE_PRICE_PRO}
+      STRIPE_PRICE_AGENCY:   ${STRIPE_PRICE_AGENCY}
+      FRONTEND_URL:          ${FRONTEND_URL:-http://localhost:3000}
+    ports:
+      - "3001:3001"
+
+  # ── Frontend ────────────────────────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL:    ${NEXT_PUBLIC_API_URL:-http://localhost:3001}
+        NEXT_PUBLIC_STRIPE_KEY: ${NEXT_PUBLIC_STRIPE_KEY}
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "3000:3000"
+
+volumes:
+  postgres_data:
+  redis_data:

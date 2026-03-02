@@ -1,0 +1,27 @@
+{
+  "name": "gotodm-frontend",
+  "version": "1.0.0",
+  "description": "Instagram DM Automation SaaS - Frontend",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "axios": "^1.6.7",
+    "next": "15.5.12",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "recharts": "^2.12.2",
+    "@stripe/stripe-js": "^3.1.0",
+    "swr": "^2.2.5"
+  },
+  "devDependencies": {
+    "autoprefixer": "^10.4.18",
+    "postcss": "^8.4.35",
+    "tailwindcss": "^3.4.1",
+    "eslint": "^8.57.0",
+    "eslint-config-next": "15.5.12"
+  }
+}
