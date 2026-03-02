@@ -22,7 +22,7 @@ export default function Layout({ children }) {
       const payload = JSON.parse(atob(token.split('.')[1]));
       setUser(payload);
     } catch {}
-  }, []);
+  }, [router]);
 
   function handleLogout() {
     const refreshToken = localStorage.getItem('refreshToken');

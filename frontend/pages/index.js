@@ -9,7 +9,7 @@ export default function Home() {
     const token = localStorage.getItem('accessToken');
     if (token) router.push('/dashboard');
     else router.push('/login');
-  }, []);
+  }, [router]);
 
   return (
     <>

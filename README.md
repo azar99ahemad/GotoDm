@@ -11,7 +11,7 @@ Production-ready Instagram DM Automation SaaS built on the **official Instagram 
 
 | Layer      | Technology                          |
 |------------|-------------------------------------|
-| Frontend   | Next.js 14 + Tailwind CSS           |
+| Frontend   | Next.js 15 + Tailwind CSS           |
 | Backend    | Node.js + Express                   |
 | Database   | PostgreSQL                          |
 | Queue      | Redis + BullMQ                      |
