@@ -36,9 +36,8 @@ app.use('/api/billing/webhook', express.raw({ type: 'application/json', limit: '
   req.rawBody = req.body;
   next();
 });
-app.use('/api/webhook', express.json({ limit: '1mb' }), (req, res, next) => {
-  // rawBody for Meta webhook: reconstruct from parsed body for signature check
-  req.rawBody = JSON.stringify(req.body);
+app.use('/api/webhook', express.raw({ type: 'application/json', limit: '1mb' }), (req, res, next) => {
+  req.rawBody = req.body;
   next();
 });
 app.use(express.json({ limit: '1mb' }));
