@@ -1,6 +1,7 @@
 const express = require('express');
 const crypto = require('crypto');
 const { authenticate } = require('../middleware/auth');
+const { getRedisClient } = require('../config/redis');
 const {
   getOAuthUrl,
   exchangeCodeForToken,
@@ -12,12 +13,56 @@ const { pool } = require('../db');
 const logger = require('../config/logger');
 
 const router = express.Router();
+const OAUTH_STATE_TTL_SECONDS = 10 * 60;
+
+function signStatePayload(payload) {
+  const secret = process.env.OAUTH_STATE_SECRET || process.env.JWT_SECRET;
+  return crypto.createHmac('sha256', secret).update(payload).digest('base64url');
+}
+
+function encodeOAuthState(payloadObj) {
+  const payload = Buffer.from(JSON.stringify(payloadObj)).toString('base64url');
+  const sig = signStatePayload(payload);
+  return `${payload}.${sig}`;
+}
+
+function decodeAndVerifyOAuthState(state) {
+  if (!state || typeof state !== 'string' || !state.includes('.')) return null;
+  const [payload, sig] = state.split('.');
+  const expectedSig = signStatePayload(payload);
+  try {
+    const ok = crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expectedSig));
+    if (!ok) return null;
+    return JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
+  } catch {
+    return null;
+  }
+}
 
 // GET /api/instagram/connect  →  Redirect to Meta OAuth
-router.get('/connect', authenticate, (req, res) => {
-  const state = Buffer.from(
-    JSON.stringify({ userId: req.user.id, csrf: crypto.randomBytes(16).toString('hex') }),
-  ).toString('base64url');
+router.get('/connect', authenticate, async (req, res) => {
+  const csrf = crypto.randomBytes(16).toString('hex');
+  const nonce = crypto.randomBytes(16).toString('hex');
+  const statePayload = {
+    nonce,
+    userId: req.user.id,
+    csrf,
+    iat: Date.now(),
+  };
+
+  const state = encodeOAuthState(statePayload);
+  const redis = getRedisClient();
+  try {
+    await redis.set(
+      `oauth_state:${nonce}`,
+      JSON.stringify({ userId: req.user.id, csrf }),
+      'EX',
+      OAUTH_STATE_TTL_SECONDS,
+    );
+  } catch (err) {
+    logger.error('Failed to persist OAuth state', { error: err.message });
+    return res.status(500).json({ error: 'Failed to initialize OAuth flow' });
+  }
 
   const url = getOAuthUrl(state);
   res.json({ url });
@@ -34,16 +79,25 @@ router.get('/callback', async (req, res) => {
     );
   }
 
-  let stateData;
-  try {
-    stateData = JSON.parse(Buffer.from(state, 'base64url').toString('utf8'));
-  } catch {
+  const stateData = decodeAndVerifyOAuthState(state);
+  if (!stateData) {
     return res.redirect(`${process.env.FRONTEND_URL}/connect?error=invalid_state`);
   }
 
-  const { userId } = stateData;
+  const { userId, csrf, nonce } = stateData;
 
   try {
+    const redis = getRedisClient();
+    const stored = await redis.get(`oauth_state:${nonce}`);
+    if (!stored) {
+      return res.redirect(`${process.env.FRONTEND_URL}/connect?error=invalid_state`);
+    }
+    const storedState = JSON.parse(stored);
+    if (String(storedState.userId) !== String(userId) || storedState.csrf !== csrf) {
+      return res.redirect(`${process.env.FRONTEND_URL}/connect?error=invalid_state`);
+    }
+    await redis.del(`oauth_state:${nonce}`);
+
     // 1. Exchange code → long-lived token
     const tokenData = await exchangeCodeForToken(code);
     const expiresAt = tokenData.expires_in

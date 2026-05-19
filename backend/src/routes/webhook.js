@@ -40,7 +40,12 @@ router.post('/', webhookLimiter, async (req, res) => {
   // Acknowledge immediately to Meta (must be < 5s)
   res.status(200).json({ status: 'ok' });
 
-  const body = req.body;
+  let body;
+  try {
+    body = JSON.parse(req.rawBody.toString('utf8'));
+  } catch {
+    return;
+  }
   if (body.object !== 'instagram') return;
 
   for (const entry of body.entry || []) {
